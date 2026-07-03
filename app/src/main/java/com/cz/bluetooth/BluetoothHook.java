@@ -14,6 +14,8 @@ import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 public class BluetoothHook {
     private static final String BLUETOOTH_ACTIVITY_CLASS = "com.tw.bt.ATBluetoothActivity";
     private static final int ibA2dpId = 0x7f08004c;
@@ -144,22 +146,20 @@ public class BluetoothHook {
                     classLoader
             );
 
-            final int[] runningFlag = {0};
-
             XposedHelpers.findAndHookMethod(
                     clazz,
                     "h0",
                     new XC_MethodHook() {
-
+                        AtomicInteger running = new AtomicInteger(0);
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            if (runningFlag[0] == 1) {
+                            if (running.get() == 1) {
                                 XposedBridge.log("[BluetoothHook][" + tag + "] h0 already running, skipping...");
                                 param.setResult(null);
                                 return;
                             }
                             try {
-                                runningFlag[0] = 1;
+                                running.set(1);
                                 // 阻止原方法立即执行
                                 param.setResult(null);
 
@@ -172,7 +172,7 @@ public class BluetoothHook {
                                     } catch (Throwable t) {
                                         XposedBridge.log("[BluetoothHook][" + tag + "] h0 delayed call failed: " + t);
                                     } finally {
-                                        runningFlag[0] = 0;
+                                        running.set(0);
                                     }
                                 }, 500);
                             } catch (Exception e) {
@@ -250,21 +250,21 @@ public class BluetoothHook {
         }
         try {
             XposedHelpers.findAndHookMethod(fragmentCls, "L0", String.class, String.class, String.class, new XC_MethodHook() {
-                final int[] running = {0};
+                AtomicInteger running = new AtomicInteger(0);
 
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
-                    if (running[0] == 1) {
+                    if (running.get() == 1) {
                         // 正在渲染，丢弃本次，不延迟
                         param.setResult(null);
                         return;
                     }
-                    running[0] = 1;
+                    running.set(1);
                 }
 
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
-                    running[0] = 0;
+                    running.set(0);
                 }
 
             });
@@ -275,21 +275,21 @@ public class BluetoothHook {
 
         try {
             XposedHelpers.findAndHookMethod(fragmentCls, "d", int.class, int.class, new XC_MethodHook() {
-                final int[] running = {0};
+                AtomicInteger running = new AtomicInteger(0);
 
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
-                    if (running[0] == 1) {
+                    if (running.get() == 1) {
                         // 正在渲染，丢弃本次，不延迟
                         param.setResult(null);
                         return;
                     }
-                    running[0] = 1;
+                    running.set(1);
                 }
 
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
-                    running[0] = 0;
+                    running.set(0);
                 }
             });
             XposedBridge.log("[BluetoothHook][" + tag + "] 拦截进度条更新，注册成功");
@@ -303,21 +303,21 @@ public class BluetoothHook {
                     classLoader
             );
             XposedHelpers.findAndHookMethod(fragmentCls, "D0", G0aClass, new XC_MethodHook() {
-                final int[] running = {0};
+                AtomicInteger running = new AtomicInteger(0);
 
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
-                    if (running[0] == 1) {
+                    if (running.get() == 1) {
                         // 正在渲染，丢弃本次，不延迟
                         param.setResult(null);
                         return;
                     }
-                    running[0] = 1;
+                    running.set(1);
                 }
 
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
-                    running[0] = 0;
+                    running.set(0);
                 }
             });
             XposedBridge.log("[BluetoothHook][" + tag + "] 拦截主题渲染，注册成功");
