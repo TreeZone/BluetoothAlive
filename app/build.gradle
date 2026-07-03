@@ -16,6 +16,17 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // 自定义APK输出文件名
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def buildType = variant.buildType.name
+            def flavorName = variant.flavorName
+            def version = variant.versionName
+            // 自定义格式：应用名_版本_渠道_编译类型.apk
+            outputFileName = "BluetoothHelper_${version}_${flavorName}_${buildType}.apk"
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
