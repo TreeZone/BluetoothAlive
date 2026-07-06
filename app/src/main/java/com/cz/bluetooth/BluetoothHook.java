@@ -14,7 +14,9 @@ import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class BluetoothHook {
     private static final String BLUETOOTH_ACTIVITY_CLASS = "com.tw.bt.ATBluetoothActivity";
@@ -25,6 +27,13 @@ public class BluetoothHook {
     private static final String TARGET_PKG = "com.tw.bt";
 
     private static boolean isForeground = false;
+
+    // 防抖常量，提升为类成员
+    private static final long DEBOUNCE_INTERVAL_MS = 1000L;
+    // 防抖状态统一抽成成员，避免多次注册新建对象
+    private final AtomicInteger running = new AtomicInteger(0);
+    private final AtomicLong lastRunTime = new AtomicLong(0);
+    private final AtomicBoolean lastParam = new AtomicBoolean(false);
 
     public void hookBluetoothConnection(final String tag, final ClassLoader classLoader) {
         try {
@@ -139,55 +148,6 @@ public class BluetoothHook {
         }
     }
 
-    public void hookBlueA2DP(String tag, ClassLoader classLoader) {
-        try {
-            Class<?> clazz = XposedHelpers.findClass(
-                    "b0.d",
-                    classLoader
-            );
-
-            XposedHelpers.findAndHookMethod(
-                    clazz,
-                    "h0",
-                    new XC_MethodHook() {
-                        AtomicInteger running = new AtomicInteger(0);
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            if (running.get() == 1) {
-                                XposedBridge.log("[BluetoothHook][" + tag + "] h0 already running, skipping...");
-                                param.setResult(null);
-                                return;
-                            }
-                            try {
-                                running.set(1);
-                                // 阻止原方法立即执行
-                                param.setResult(null);
-
-                                XposedBridge.log("[BluetoothHook][" + tag + "] h0 intercepted, delaying execution...");
-
-                                new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                                    try {
-                                        // 反射调用原方法
-                                        XposedHelpers.callMethod(param.thisObject, "h0");
-                                    } catch (Throwable t) {
-                                        XposedBridge.log("[BluetoothHook][" + tag + "] h0 delayed call failed: " + t);
-                                    } finally {
-                                        running.set(0);
-                                    }
-                                }, 500);
-                            } catch (Exception e) {
-                                XposedBridge.log("[BluetoothHook][" + tag + "] h0 error: " + e);
-                            }
-                        }
-                    }
-            );
-
-            XposedBridge.log("[BluetoothHook][" + tag + "] Hook h0 success");
-        } catch (Exception e) {
-            XposedBridge.log("[BluetoothHook][" + tag + "] Hook h0 failed, e = " + e.getMessage());
-        }
-    }
-
     // Hook F0.a.l0 初始化控件，运行时移除 tv_song marquee
     public void hookA2dpFragment(String tag, ClassLoader classLoader) {
         Class<?> fragmentCls = XposedHelpers.findClass("F0.a", classLoader);
@@ -241,89 +201,51 @@ public class BluetoothHook {
         }
     }
 
-    public void hookMusic(String tag, ClassLoader classLoader) {
-        Class<?> fragmentCls = null;
+    public void hookRepeatC(String tag, ClassLoader classLoader) {
         try {
-            fragmentCls = XposedHelpers.findClass("F0.a", classLoader);
-        } catch (Exception e) {
-            XposedBridge.log("[BluetoothHook][" + tag + "] 获取 F0.a 失败，e = " + e.getMessage());
-        }
-        try {
-            XposedHelpers.findAndHookMethod(fragmentCls, "L0", String.class, String.class, String.class, new XC_MethodHook() {
-                AtomicInteger running = new AtomicInteger(0);
-
+            Class<?> A0cClass = XposedHelpers.findClass("a0.c", classLoader);
+            // 增加防重复Hook判断（可选，推荐）
+            XposedHelpers.findAndHookMethod(A0cClass, "c", boolean.class, new XC_MethodHook() {
                 @Override
-                protected void beforeHookedMethod(MethodHookParam param) {
-                    if (running.get() == 1) {
-                        // 正在渲染，丢弃本次，不延迟
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    long currentTimeMillis = System.currentTimeMillis();
+                    Boolean currArg = (Boolean) param.args[0];
+                    XposedBridge.log("[BluetoothHook][" + tag + "] 拦截c方法开始,param=" + currArg + ",time=" + currentTimeMillis);
+
+                    // 1. 原子抢占锁：CAS 确保同一时间只有一个线程进入执行逻辑
+                    boolean acquire = running.compareAndSet(0, 1);
+                    long lastTime = lastRunTime.get();
+                    boolean sameParam = lastParam.get() == currArg;
+                    boolean fastRepeat = (currentTimeMillis - lastTime) < DEBOUNCE_INTERVAL_MS && sameParam;
+
+                    // 未抢到锁 或 短时间同参数重复，直接丢弃
+                    if (!acquire || fastRepeat) {
                         param.setResult(null);
+                        XposedBridge.log("[BluetoothHook][" + tag + "] 重复执行拦截,acquire=" + acquire + ",param=" + currArg);
                         return;
                     }
-                    running.set(1);
+
+                    // 抢占成功，更新状态
+                    lastRunTime.set(currentTimeMillis);
+                    lastParam.set(currArg);
+                    XposedBridge.log("[BluetoothHook][" + tag + "] 获取执行权限，正常执行");
                 }
 
                 @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    running.set(0);
-                }
-
-            });
-            XposedBridge.log("[BluetoothHook][" + tag + "] 拦截歌曲标题，注册成功");
-        } catch (Exception e) {
-            XposedBridge.log("[BluetoothHook][" + tag + "] 拦截歌曲标题，注册失败，e = " + e.getMessage());
-        }
-
-        try {
-            XposedHelpers.findAndHookMethod(fragmentCls, "d", int.class, int.class, new XC_MethodHook() {
-                AtomicInteger running = new AtomicInteger(0);
-
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) {
-                    if (running.get() == 1) {
-                        // 正在渲染，丢弃本次，不延迟
-                        param.setResult(null);
-                        return;
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    // 无论正常/异常都释放锁，finally兜底
+                    try {
+                        // 原有后置逻辑
+                    } finally {
+                        running.set(0);
                     }
-                    running.set(1);
-                }
-
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    running.set(0);
                 }
             });
-            XposedBridge.log("[BluetoothHook][" + tag + "] 拦截进度条更新，注册成功");
-        } catch (Exception e) {
-            XposedBridge.log("[BluetoothHook][" + tag + "] 拦截进度条更新，注册失败，e = " + e.getMessage());
-        }
-
-        try {
-            Class<?> G0aClass = XposedHelpers.findClass(
-                    "G0.a",
-                    classLoader
-            );
-            XposedHelpers.findAndHookMethod(fragmentCls, "D0", G0aClass, new XC_MethodHook() {
-                AtomicInteger running = new AtomicInteger(0);
-
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) {
-                    if (running.get() == 1) {
-                        // 正在渲染，丢弃本次，不延迟
-                        param.setResult(null);
-                        return;
-                    }
-                    running.set(1);
-                }
-
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    running.set(0);
-                }
-            });
-            XposedBridge.log("[BluetoothHook][" + tag + "] 拦截主题渲染，注册成功");
-        } catch (Exception e) {
-            XposedBridge.log("[BluetoothHook][" + tag + "] 拦截主题渲染，注册失败，e = " + e.getMessage());
+            XposedBridge.log("[BluetoothHook][" + tag + "] c方法Hook注册成功");
+        } catch (Throwable e) {
+            // 打印完整堆栈，方便排错
+            XposedBridge.log("[BluetoothHook][" + tag + "] c方法Hook注册失败");
+            XposedBridge.log(e);
         }
     }
-
 }

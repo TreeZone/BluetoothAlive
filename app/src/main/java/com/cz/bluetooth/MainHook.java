@@ -42,10 +42,9 @@ public class MainHook implements IXposedHookLoadPackage {
                     lpparam.classLoader
             );
 
-            bluetoothHook.hookBlueA2DP("BLUETOOTH_A2DP", lpparam.classLoader);
             bluetoothHook.hookA2dpFragment("BLUETOOTH_A2DP_FRAGMENT", lpparam.classLoader);
             bluetoothHook.hookTextViewSetSelected("BLUETOOTH_A2DP_FRAGMENT_TEXT_VIEW_SELECTED", lpparam.classLoader);
-            bluetoothHook.hookMusic("BLUETOOTH_A2DP_FRAGMENT_MUSIC_TITLE", lpparam.classLoader);
+            bluetoothHook.hookRepeatC("BLUETOOTH_A2DP_FRAGMENT_REPEAT_C", lpparam.classLoader);
         }
     }
 }
