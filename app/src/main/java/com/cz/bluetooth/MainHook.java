@@ -36,15 +36,8 @@ public class MainHook implements IXposedHookLoadPackage {
                     "WINDOW_POSITION", lpparam.classLoader
             );
             // 处理蓝牙默认打开媒体界面
-            BluetoothHook bluetoothHook = new BluetoothHook();
-            bluetoothHook.hookBluetoothConnection(
-                    "BLUETOOTH_WINDOW",
-                    lpparam.classLoader
-            );
-
-            bluetoothHook.hookA2dpFragment("BLUETOOTH_A2DP_FRAGMENT", lpparam.classLoader);
-            bluetoothHook.hookTextViewSetSelected("BLUETOOTH_A2DP_FRAGMENT_TEXT_VIEW_SELECTED", lpparam.classLoader);
-            bluetoothHook.hookRepeatC("BLUETOOTH_A2DP_FRAGMENT_REPEAT_C", lpparam.classLoader);
+//            BluetoothHook bluetoothHook = new BluetoothHook();
+//            bluetoothHook.hookWriteAsync("BLUETOOTH_WRITE_ASYNC", lpparam.classLoader);
         }
     }
 }
